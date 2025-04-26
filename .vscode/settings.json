@@ -1,0 +1,4 @@
+{
+    "docker.executable": "/opt/homebrew/bin/podman",
+    "python.analysis.autoImportCompletions": true
+} 
