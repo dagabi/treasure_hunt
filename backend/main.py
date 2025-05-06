@@ -122,7 +122,7 @@ async def get_player_state(playerId: str = Cookie(None)):
 @app.post("/api/scan")
 async def scan_qr_code(request: ScanRequest):
     if request.player_id not in players:
-        raise HTTPException(status_code=404, detail="Player not found")
+        raise HTTPException(status_code=404, detail="Player does not exist")
     
     player = players[request.player_id]
     time_left = get_time_left(player)
@@ -144,7 +144,7 @@ async def scan_qr_code(request: ScanRequest):
         current_hint = next((h for h in hints if h["level"] == player.current_level), None)
         
         if not current_hint or current_hint["next_qr_code"] != request.qr_code.code:
-            raise HTTPException(status_code=400, detail="Incorrect QR code")
+            raise HTTPException(status_code=405, detail="Incorrect QR code")
     
     # Update player's level
     player.current_level += 1
