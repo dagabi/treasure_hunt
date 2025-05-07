@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { theme } from '../theme';
 import axios from 'axios';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import Cookies from 'js-cookie';
 import { getEnvVar, isDev } from '../util/envVar';
 
@@ -72,7 +72,7 @@ const ScannerContainer = styled.div`
     margin: ${theme.spacing.medium} 0;
     border-radius: ${theme.borderRadius};
     overflow: hidden;
-    min-height: 250px;
+    min-height: 100px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -114,7 +114,7 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd, initialHint }) => {
     const [currentLevel, setCurrentLevel] = useState<number>(0);
     const [isProcessingScan, setIsProcessingScan] = useState<boolean>(false);
     const [debugMode, setDebugMode] = useState<boolean>(false);
-    const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+    const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const lastScannedCode = useRef<string>('');
     const scanTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,103 +271,42 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd, initialHint }) => {
         }
     };
 
-    const startScanner = () => {
-        console.log('Starting scanner...');
-        setError(''); // Clear any previous errors
-        
-        if (!scannerContainerRef.current) {
-            console.error('Scanner container not found');
-            return;
+    const startScanner = async () => {
+        setError('');
+        if (!scannerContainerRef.current) return;
+        setIsScanning(true);
+        // Ensure qr-reader div exists
+        let qrReaderElement = document.getElementById('qr-reader');
+        if (!qrReaderElement) {
+            qrReaderElement = document.createElement('div');
+            qrReaderElement.id = 'qr-reader';
+            qrReaderElement.style.width = '100%';
+            scannerContainerRef.current.appendChild(qrReaderElement);
         }
-
         try {
-            setIsScanning(true);
-            
-            // Wait for the next render cycle to ensure the element is mounted
-            setTimeout(() => {
-                const qrReaderElement = document.getElementById('qr-reader');
-                if (!qrReaderElement) {
-                    console.error('QR reader element not found after mount');
-                    setError('שגיאה בהפעלת הסורק. אנא נסה שוב.');
-                    setIsScanning(false);
-                    return;
-                }
-
-                try {
-
-                    let scanner = isDev() ? {
-                            fps: 10,
-                            qrbox: { width: 250, height: 250 },
-                            aspectRatio: 1.0,
-                            disableFlip: false
-                        } : {
-                            fps: 10,
-                            qrbox: { width: 250, height: 250 },
-                            aspectRatio: 1.0,
-                            disableFlip: false,
-                            videoConstraints: {
-                                facingMode: { exact: "environment" }
-                            },
-                            rememberLastUsedCamera: true
-                        };
-
-                    // Create a new instance of Html5QrcodeScanner
-                    scannerRef.current = new Html5QrcodeScanner(
-                        "qr-reader",
-                        scanner,
-
-                        
-                        false
-                    );
-
-                    // Define success callback
-                    const onScanSuccess = (decodedText: string) => {
-                        console.log('QR Code detected:', decodedText);
-                        handleScan(decodedText);
-                    };
-
-                    // Define error callback
-                    const onScanError = (errorMessage: string) => {
-                        // Only log errors that aren't "not found" errors
-                        if (!errorMessage.includes('No barcode or QR code detected') && !errorMessage.includes('NotFoundException')) {
-                            console.error('QR Code scan error:', errorMessage);
-                        }
-                    };
-
-                    // Start the scanner
-                    scannerRef.current.render(onScanSuccess, onScanError);
-                    console.log('Scanner started successfully');
-                } catch (error) {
-                    console.error('Failed to initialize scanner:', error);
-                    setError('שגיאה בהפעלת הסורק. אנא וודא שהמצלמה זמינה ונסה שוב.');
-                    setIsScanning(false);
-                }
-            }, 100);
-        } catch (error) {
-            console.error('Failed to start scanner:', error);
+            html5QrCodeRef.current = new Html5Qrcode('qr-reader');
+            const devices = await Html5Qrcode.getCameras();
+            // Prefer rear camera
+            const rearCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
+            await html5QrCodeRef.current.start(
+                { deviceId: { exact: rearCamera.id } },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                handleScan,
+                (err) => {}
+            );
+        } catch (err) {
             setError('שגיאה בהפעלת הסורק. אנא וודא שהמצלמה זמינה ונסה שוב.');
-            stopScanner();
+            setIsScanning(false);
         }
     };
 
-    const stopScanner = () => {
-        console.log('Stopping scanner...');
-        if (scannerRef.current) {
-            try {
-                scannerRef.current.clear();
-                scannerRef.current = null;
-                lastScannedCode.current ="";
-                setIsScanning(false);
-                console.log('Scanner stopped successfully');
-            } catch (error) {
-                console.error('Error stopping scanner:', error);
-                lastScannedCode.current = "";
-                setIsScanning(false);
-            }
-        } else {
-            lastScannedCode.current = "";
-            setIsScanning(false);
+    const stopScanner = async () => {
+        if (html5QrCodeRef.current) {
+            await html5QrCodeRef.current.stop();
+            await html5QrCodeRef.current.clear();
+            html5QrCodeRef.current = null;
         }
+        setIsScanning(false);
     };
 
     return (
@@ -393,7 +332,7 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd, initialHint }) => {
             )}
             <ScannerContainer ref={scannerContainerRef}>
                 {isScanning && (
-                    <div id="qr-reader" style={{ width: '100%', height: '400px', position: 'relative' }}></div>
+                    <div id="qr-reader" style={{ width: 350, height: 350, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 auto' }}></div>
                 )}
             </ScannerContainer>
             <ScanButton onClick={isScanning ? stopScanner : startScanner}>

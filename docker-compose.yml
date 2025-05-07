@@ -29,7 +29,8 @@ services:
       - /workspace/frontend/node_modules
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:8086
+      #- REACT_APP_API_URL=http://localhost:8086
+      #- REACT_APP_DEBUG=true
       - PORT=80
       - HOST=0.0.0.0
     depends_on:
