@@ -54,6 +54,8 @@ class PlayerState(BaseModel):
 
 # Game state
 players = {}
+last_scan_times = {}  # Track last scan time for each player
+SCAN_COOLDOWN = 5  # Cooldown period in seconds
 GAME_DURATION = 60  # minutes
 HINTS_FILE = "hints.json"
 
@@ -124,6 +126,16 @@ async def scan_qr_code(request: ScanRequest):
     if request.player_id not in players:
         raise HTTPException(status_code=404, detail="Player does not exist")
     
+    # Check for scan cooldown
+    current_time = datetime.now()
+    if request.player_id in last_scan_times:
+        time_since_last_scan = (current_time - last_scan_times[request.player_id]).total_seconds()
+        if time_since_last_scan < SCAN_COOLDOWN:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Please wait {SCAN_COOLDOWN - int(time_since_last_scan)} seconds before scanning again"
+            )
+    
     player = players[request.player_id]
     time_left = get_time_left(player)
     
@@ -131,6 +143,9 @@ async def scan_qr_code(request: ScanRequest):
         # Remove expired player
         del players[request.player_id]
         raise HTTPException(status_code=400, detail="Game time is up")
+    
+    # Update last scan time
+    last_scan_times[request.player_id] = current_time
     
     hints = load_hints()
     

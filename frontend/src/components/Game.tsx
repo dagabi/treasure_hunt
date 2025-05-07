@@ -257,6 +257,9 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd, initialHint }) => {
                             setError('שגיאה בסריקה. אנא נסה שוב.');
                         }
                         break;
+                    case 429:
+                        console.log("scan cooldown");
+                        break;
                     default:
                         setError('שגיאה בסריקה. אנא נסה שוב.');
                 }
