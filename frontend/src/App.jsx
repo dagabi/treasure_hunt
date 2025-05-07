@@ -6,6 +6,7 @@ import Game from './components/Game';
 import Results from './components/Results';
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { getEnvVar } from './util/envVar';
 
 const AppContainer = styled.div`
     min-height: 100vh;
@@ -29,7 +30,7 @@ const App = () => {
 
     const handleRegister = async (name, familyName) => {
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
             const response = await axios.post(`${apiUrl}/api/register`, {
                 name,
                 family_name: familyName,
@@ -39,11 +40,12 @@ const App = () => {
             // Store player ID in cookie for 1 hour
             Cookies.set('playerId', newPlayerId, { expires: 1/24 }); // 1/24 of a day = 1 hour
         } catch (error) {
+            console.error('Error registering player:', error);
             alert('שגיאה בהרשמה. אנא נסה שוב.');
         }
     };
 
-    const handleGameEnd = () => {
+    const handleGameEnd = (timeLeft) => {
         setGameEnded(true);
         setCompletionTime(60 * 60 - timeLeft); // Convert time left to completion time
         // Remove the player ID cookie when game ends

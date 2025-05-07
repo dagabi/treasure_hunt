@@ -5,8 +5,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     volumes:
       - ./backend:/app
       - /app/__pycache__
@@ -22,14 +20,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8080:80"
     volumes:
       - ./frontend:/workspace
       - /workspace/frontend/node_modules
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=http://localhost:8000
-      - PORT=3000
+      - REACT_APP_API_URL=""
+      - REACT_APP_DEBUG=true
       - HOST=0.0.0.0
     depends_on:
       - backend

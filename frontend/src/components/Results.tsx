@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { theme } from '../theme';
 import axios from 'axios';
+import { getEnvVar } from '../util/envVar';
 
 const Container = styled.div`
     max-width: 600px;
@@ -96,7 +97,7 @@ const Results: React.FC<ResultsProps> = ({ playerId, completionTime }) => {
     useEffect(() => {
         const fetchResults = async () => {
             try {
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+                const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
                 const response = await axios.get(`${apiUrl}/api/results/${playerId}`);
                 setLeaderboard(response.data.leaderboard);
                 setCurrentPlayer(response.data.current_player);

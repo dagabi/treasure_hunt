@@ -1,0 +1,4 @@
+window.__ENV__ = {
+    REACT_APP_API_URL: "$REACT_APP_API_URL",
+    REACT_APP_DEBUG: "$REACT_APP_DEBUG"
+  };

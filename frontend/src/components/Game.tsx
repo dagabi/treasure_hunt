@@ -4,6 +4,7 @@ import { theme } from '../theme';
 import axios from 'axios';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import Cookies from 'js-cookie';
+import { getEnvVar } from '../util/envVar';
 
 const Container = styled.div`
     max-width: 600px;
@@ -109,13 +110,13 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const lastScannedCode = useRef<string>('');
-    const scanTimeout = useRef<number | null>(null);
+    const scanTimeout = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         // Check for existing player state
         const checkPlayerState = async () => {
             try {
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+                const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
                 const response = await axios.get(`${apiUrl}/api/player-state`, {
                     withCredentials: true
                 });
@@ -195,7 +196,7 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
             lastScannedCode.current = decodedText;
             
             try {
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+                const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
                 const response = await axios.post(`${apiUrl}/api/scan`, {
                     player_id: playerId,
                     qr_code: { code: decodedText, level: currentLevel + 1 },
@@ -343,9 +344,11 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
 
     return (
         <Container>
+            { getEnvVar('REACT_APP_DEBUG') && (
             <DebugToggle onClick={() => setDebugMode(!debugMode)}>
                 {debugMode ? 'מצב דיבאג: פעיל' : 'מצב דיבאג: כבוי'}
-            </DebugToggle>
+            </DebugToggle>)}
+            
             <Timer>זמן שנותר: {formatTime(timeLeft)}</Timer>
             {educationalText && (
                 <EducationalBox>
