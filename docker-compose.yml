@@ -5,34 +5,39 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    ports:
+      - "8086:8000"
     volumes:
       - ./backend:/app
       - /app/__pycache__
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-      - CORS_ORIGINS=http://localhost:8080,http://192.168.1.81:8080
+      - CORS_ORIGINS=http://localhost:8085,https://treasure.ghuboss.com
     networks:
       - treasure-hunt-network
+    restart: always
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "8085:80"
     volumes:
       - ./frontend:/workspace
       - /workspace/frontend/node_modules
     environment:
       - NODE_ENV=development
-      - REACT_APP_DEBUG=false
+      - REACT_APP_API_URL=http://localhost:8086
+      - PORT=80
       - HOST=0.0.0.0
     depends_on:
       - backend
     networks:
       - treasure-hunt-network
+    restart: always
 
 networks:
   treasure-hunt-network:
-    driver: bridge 
+    driver: bridge
