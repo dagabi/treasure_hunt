@@ -184,77 +184,69 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
             return;
         }
 
-        // Clear any existing timeout
-        if (scanTimeout.current) {
-            clearTimeout(scanTimeout.current);
-        }
+        console.log('QR Code detected:', decodedText);
+        setIsProcessingScan(true);
+        lastScannedCode.current = decodedText;
+        
+        try {
+            const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
+            const response = await axios.post(`${apiUrl}/api/scan`, {
+                player_id: playerId,
+                qr_code: { code: decodedText, level: currentLevel + 1 },
+                debug: debugMode
+            }, {
+                withCredentials: true
+            });
 
-        // Set a new timeout to prevent rapid successive scans
-        scanTimeout.current = setTimeout(async () => {
-            console.log('QR Code detected:', decodedText);
-            setIsProcessingScan(true);
-            lastScannedCode.current = decodedText;
-            
-            try {
-                const apiUrl = getEnvVar('REACT_APP_API_URL') || '';
-                const response = await axios.post(`${apiUrl}/api/scan`, {
-                    player_id: playerId,
-                    qr_code: { code: decodedText, level: currentLevel + 1 },
-                    debug: debugMode
-                }, {
-                    withCredentials: true
-                });
-
-                if (response.data.message === "game completed") {
-                    onGameEnd(response.data.completion_time);
-                    stopScanner();
-                    return;
-                }
-                
-                if (response.data.hint) {
-                    setHint(response.data.hint);
-                    setEducationalText(response.data.educational_text);
-                    setCurrentLevel(prev => prev + 1);
-                    setError('');
-                } else if (response.data.message) {
-                    setHint(response.data.message);
-                    setEducationalText('');
-                    setError('');
-                }
-                
-                // Stop the scanner after successful scan
+            if (response.data.message === "game completed") {
+                onGameEnd(response.data.completion_time);
                 stopScanner();
-            } catch (error: any) {
-                console.error('Scan error:', error);
-                if (error.response) {
-                    // Handle specific error messages from the backend
-                    switch (error.response.status) {
-                        case 404:
-                            setError('שחקן לא נמצא. אנא הירשם מחדש.');
-                            Cookies.remove('playerId');
-                            onGameEnd(timeLeft);
-                            break;
-                        case 400:
-                            if (error.response.data.detail === 'Game time is up') {
-                                setError('זמן המשחק נגמר!');
-                                Cookies.remove('playerId');
-                                onGameEnd(0);
-                            } else if (error.response.data.detail === 'Wrong QR code') {
-                                setError('קוד QR שגוי. אנא נסה שוב.');
-                            } else {
-                                setError('שגיאה בסריקה. אנא נסה שוב.');
-                            }
-                            break;
-                        default:
-                            setError('שגיאה בסריקה. אנא נסה שוב.');
-                    }
-                } else {
-                    setError('שגיאה בסריקה. אנא נסה שוב.');
-                }
-            } finally {
-                setIsProcessingScan(false);
+                return;
             }
-        }, 1000); // Wait 1 second before processing the scan
+            
+            if (response.data.hint) {
+                setHint(response.data.hint);
+                setEducationalText(response.data.educational_text);
+                setCurrentLevel(prev => prev + 1);
+                setError('');
+            } else if (response.data.message) {
+                setHint(response.data.message);
+                setEducationalText('');
+                setError('');
+            }
+            
+            // Stop the scanner after successful scan
+            stopScanner();
+        } catch (error: any) {
+            console.error('Scan error:', error);
+            if (error.response) {
+                // Handle specific error messages from the backend
+                switch (error.response.status) {
+                    case 404:
+                        setError('שחקן לא נמצא. אנא הירשם מחדש.');
+                        Cookies.remove('playerId');
+                        onGameEnd(timeLeft);
+                        break;
+                    case 400:
+                        if (error.response.data.detail === 'Game time is up') {
+                            setError('זמן המשחק נגמר!');
+                            Cookies.remove('playerId');
+                            onGameEnd(0);
+                        } else if (error.response.data.detail === 'Wrong QR code') {
+                            setError('קוד QR שגוי. אנא נסה שוב.');
+                        } else {
+                            setError('שגיאה בסריקה. אנא נסה שוב.');
+                        }
+                        break;
+                    default:
+                        setError('שגיאה בסריקה. אנא נסה שוב.');
+                }
+            } else {
+                setError('שגיאה בסריקה. אנא נסה שוב.');
+            }
+        } finally {
+            setIsProcessingScan(false);
+        }
     };
 
     const startScanner = () => {
@@ -287,7 +279,11 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                             fps: 10,
                             qrbox: { width: 250, height: 250 },
                             aspectRatio: 1.0,
-                            disableFlip: false
+                            disableFlip: false,
+                            videoConstraints: {
+                                facingMode: { exact: "environment" }
+                            },
+                            rememberLastUsedCamera: true
                         },
                         false
                     );
@@ -344,7 +340,7 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
 
     return (
         <Container>
-            { getEnvVar('REACT_APP_DEBUG') && (
+            { getEnvVar('REACT_APP_DEBUG') == "true" && (
             <DebugToggle onClick={() => setDebugMode(!debugMode)}>
                 {debugMode ? 'מצב דיבאג: פעיל' : 'מצב דיבאג: כבוי'}
             </DebugToggle>)}

@@ -26,8 +26,7 @@ services:
       - /workspace/frontend/node_modules
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=""
-      - REACT_APP_DEBUG=true
+      - REACT_APP_DEBUG=false
       - HOST=0.0.0.0
     depends_on:
       - backend
