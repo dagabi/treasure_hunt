@@ -4,7 +4,7 @@ import { theme } from '../theme';
 import axios from 'axios';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import Cookies from 'js-cookie';
-import { getEnvVar } from '../util/envVar';
+import { getEnvVar, isDev } from '../util/envVar';
 
 const Container = styled.div`
     max-width: 600px;
@@ -93,15 +93,22 @@ const ScanButton = styled.button`
     }
 `;
 
+interface Hint {
+    educational_text: string;
+    text: string;
+}
+
 interface GameProps {
     playerId: string;
     onGameEnd: (timeLeft: number) => void;
+    initialHint?: Hint;
 }
 
-const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
-    const [hint, setHint] = useState<string>('');
-    const [educationalText, setEducationalText] = useState<string>('');
-    const [timeLeft, setTimeLeft] = useState<number>(60 * 60); // 60 minutes in seconds
+const Game: React.FC<GameProps> = ({ playerId, onGameEnd, initialHint }) => {
+    const [hint, setHint] = useState<string>(initialHint?.text || '');
+    const [educationalText, setEducationalText] = useState<string>(initialHint?.educational_text || '');
+    const timeLeftRef = useRef<number>(60 * 60); // 60 minutes in seconds
+    const timerDisplayRef = useRef<HTMLDivElement>(null);
     const [isScanning, setIsScanning] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [currentLevel, setCurrentLevel] = useState<number>(0);
@@ -110,7 +117,15 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const lastScannedCode = useRef<string>('');
-    const scanTimeout = useRef<NodeJS.Timeout | null>(null);
+    const scanTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const updateTimerDisplay = () => {
+        if (timerDisplayRef.current) {
+            const minutes = Math.floor(timeLeftRef.current / 60);
+            const seconds = timeLeftRef.current % 60;
+            timerDisplayRef.current.textContent = `זמן שנותר: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    };
 
     useEffect(() => {
         // Check for existing player state
@@ -122,7 +137,8 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                 });
                 
                 if (response.data.time_left) {
-                    setTimeLeft(response.data.time_left);
+                    timeLeftRef.current = response.data.time_left;
+                    updateTimerDisplay();
                     setCurrentLevel(response.data.current_level);
                 }
 
@@ -131,10 +147,11 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                 }
 
                 // Get the next hint if player has started the game
-                if (response.data.current_level > 0) {
+                if (response.data.current_level >= 0) {
                     const hintResponse = await axios.get(`${apiUrl}/api/hints`);
                     if (hintResponse.data) {
                         setHint(hintResponse.data[response.data.current_level].text);
+                        setEducationalText(hintResponse.data[response.data.current_level].educational_text);
                     }
                 }
             } catch (error: any) {
@@ -149,14 +166,13 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
         checkPlayerState();
 
         const timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 0) {
-                    clearInterval(timer);
-                    onGameEnd(0);
-                    return 0;
-                }
-                return prev - 1;
-            });
+            timeLeftRef.current -= 1;
+            updateTimerDisplay();
+            
+            if (timeLeftRef.current <= 0) {
+                clearInterval(timer);
+                onGameEnd(0);
+            }
         }, 1000);
 
         return () => {
@@ -165,11 +181,10 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
         };
     }, [onGameEnd]);
 
-    const formatTime = (seconds: number): string => {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
+    useEffect(() => {
+        setHint(initialHint?.text || '');
+        setEducationalText(initialHint?.educational_text || '');
+    }, [initialHint]);
 
     const handleScan = async (decodedText: string) => {
         // Prevent multiple scans of the same code
@@ -219,21 +234,25 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
             stopScanner();
         } catch (error: any) {
             console.error('Scan error:', error);
+            stopScanner();
             if (error.response) {
                 // Handle specific error messages from the backend
                 switch (error.response.status) {
                     case 404:
                         setError('שחקן לא נמצא. אנא הירשם מחדש.');
                         Cookies.remove('playerId');
-                        onGameEnd(timeLeft);
+                        onGameEnd(timeLeftRef.current);
+                        break;
+                    case 405:
+                        if (error.response.data.detail === 'Incorrect QR code') {
+                            setError('קוד QR שגוי. אנא נסה שוב.');
+                        }
                         break;
                     case 400:
                         if (error.response.data.detail === 'Game time is up') {
                             setError('זמן המשחק נגמר!');
                             Cookies.remove('playerId');
                             onGameEnd(0);
-                        } else if (error.response.data.detail === 'Wrong QR code') {
-                            setError('קוד QR שגוי. אנא נסה שוב.');
                         } else {
                             setError('שגיאה בסריקה. אנא נסה שוב.');
                         }
@@ -272,10 +291,13 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                 }
 
                 try {
-                    // Create a new instance of Html5QrcodeScanner
-                    scannerRef.current = new Html5QrcodeScanner(
-                        "qr-reader",
-                        {
+
+                    let scanner = isDev() ? {
+                            fps: 10,
+                            qrbox: { width: 250, height: 250 },
+                            aspectRatio: 1.0,
+                            disableFlip: false
+                        } : {
                             fps: 10,
                             qrbox: { width: 250, height: 250 },
                             aspectRatio: 1.0,
@@ -284,7 +306,14 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                                 facingMode: { exact: "environment" }
                             },
                             rememberLastUsedCamera: true
-                        },
+                        };
+
+                    // Create a new instance of Html5QrcodeScanner
+                    scannerRef.current = new Html5QrcodeScanner(
+                        "qr-reader",
+                        scanner,
+
+                        
                         false
                     );
 
@@ -345,7 +374,7 @@ const Game: React.FC<GameProps> = ({ playerId, onGameEnd }) => {
                 {debugMode ? 'מצב דיבאג: פעיל' : 'מצב דיבאג: כבוי'}
             </DebugToggle>)}
             
-            <Timer>זמן שנותר: {formatTime(timeLeft)}</Timer>
+            <Timer ref={timerDisplayRef}>זמן שנותר: 60:00</Timer>
             {educationalText && (
                 <EducationalBox>
                     <EducationalText>{educationalText}</EducationalText>

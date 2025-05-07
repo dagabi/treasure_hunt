@@ -19,6 +19,7 @@ const App = () => {
     const [playerId, setPlayerId] = useState(null);
     const [gameEnded, setGameEnded] = useState(false);
     const [completionTime, setCompletionTime] = useState(null);
+    const [firstHint, setFirstHint] = useState(null);
 
     useEffect(() => {
         // Check for existing player ID in cookies
@@ -39,6 +40,12 @@ const App = () => {
             setPlayerId(newPlayerId);
             // Store player ID in cookie for 1 hour
             Cookies.set('playerId', newPlayerId, { expires: 1/24 }); // 1/24 of a day = 1 hour
+
+            // Fetch the first hint
+            const hintResponse = await axios.get(`${apiUrl}/api/hints`);
+            if (hintResponse.data && hintResponse.data[0]) {
+                setFirstHint(hintResponse.data[0]);
+            }
         } catch (error) {
             console.error('Error registering player:', error);
             alert('שגיאה בהרשמה. אנא נסה שוב.');
@@ -59,7 +66,7 @@ const App = () => {
             ) : gameEnded ? (
                 <Results playerId={playerId} completionTime={completionTime} />
             ) : (
-                <Game playerId={playerId} onGameEnd={handleGameEnd} />
+                <Game playerId={playerId} onGameEnd={handleGameEnd} initialHint={firstHint} />
             )}
         </AppContainer>
     );

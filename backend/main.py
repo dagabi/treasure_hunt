@@ -135,23 +135,19 @@ async def scan_qr_code(request: ScanRequest):
     hints = load_hints()
     
     # Skip validation if debug mode is enabled
-    if not request.debug:
-        # Check if this is the correct QR code for the next level
-        if request.qr_code.level != player.current_level + 1:
-            raise HTTPException(status_code=400, detail="Wrong QR code level")
-        
+    if not request.debug:      
         # Get the expected QR code for this level
-        current_hint = next((h for h in hints if h["level"] == player.current_level), None)
+        current_hint = hints[player.current_level]
         
-        if not current_hint or current_hint["next_qr_code"] != request.qr_code.code:
+        # Only validate next QR code if this isn't the final level
+        if current_hint and current_hint["next_qr_code"] != request.qr_code.code:
             raise HTTPException(status_code=405, detail="Incorrect QR code")
     
     # Update player's level
     player.current_level += 1
     
     # Get next hint
-    next_hint = next((h for h in hints if h["level"] == player.current_level), None)
-    if not next_hint:
+    if player.current_level >= len(hints):
         # Game completed
         if(player.completion_time is not None):
             return {"message": "game completed", "completion_time": player.completion_time}
@@ -167,6 +163,8 @@ async def scan_qr_code(request: ScanRequest):
             family_name=player.family_name,
             completion_time=completion_time
         )
+    else:
+        next_hint = hints[player.current_level]
     
     if player.completion_time is not None:
         return {"message": "game completed", "completion_time": completion_time}
