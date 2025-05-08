@@ -8,6 +8,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from results import router as results_router
+from fastapi import APIRouter
 
 app = FastAPI()
 
@@ -198,6 +199,44 @@ async def update_hints(hints: List[Hint]):
     save_hints([h.dict() for h in hints])
     return {"message": "Hints updated successfully"}
 
+admin_router = APIRouter()
+
+@admin_router.get("/api/admin/active-users")
+async def get_active_users():
+    try:
+        active_users = [
+            {
+                "player_id": player_id,
+                "name": player.name,
+                "family_name": player.family_name,
+                "time_left": get_time_left(player),
+                "current_level": player.current_level
+            }
+            for player_id, player in players.items()
+        ]
+        return active_users
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@admin_router.put("/api/admin/update-level/{player_id}/{new_level}")
+async def update_user_level(player_id: str, new_level: int):
+    if player_id not in players:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    player = players[player_id]
+    player.current_level = new_level
+    return {"message": "Player level updated successfully"}
+
+@admin_router.delete("/api/admin/remove-user/{player_id}")
+async def remove_user(player_id: str):
+    if player_id not in players:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    del players[player_id]
+    return {"message": "Player removed successfully"}
+
+app.include_router(admin_router)
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
