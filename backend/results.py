@@ -3,20 +3,28 @@ from typing import List, Dict
 import json
 import os
 from datetime import datetime
+import threading
 
 router = APIRouter()
 
 RESULTS_FILE = "game_results.json"
+file_lock = threading.Lock()
 
 def load_results():
     if not os.path.exists(RESULTS_FILE):
         return []
-    with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    
+    with file_lock:
+        with open(RESULTS_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
 
 def save_results(results):
-    with open(RESULTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    with file_lock:
+        with open(RESULTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
 
 def update_leaderboard(player_id: str, name: str, family_name: str, completion_time: int):
     results = load_results()
